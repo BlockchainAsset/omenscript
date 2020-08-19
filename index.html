@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPMM Archive Data to CSV</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container text-center">
+        <div>
+            <h1>Omen Pool Liquidity Archive Data</h1>
+        </div>
+        <div>
+            <small class="form-text">Input the start block number and the end block number.</small>
+            <div>
+                <label for="startBlock">Start Block: </label><br>
+                <input class="form-control" type="number" name="startBlock" id="start-Block" placeholder="Enter the Start Block. Ex: 10670000">
+                <label for="endBlock">End Block: </label><br>
+                <input class="form-control" type="number" name="endBlock" id="end-Block" placeholder="Enter the End Block. Ex: 10690000">
+                <hr>
+                <button class="btn btn-primary" type="submit" onclick="initiateFN()">Download</button>
+            </div>
+        </div>
+        <hr>
+        <div id="previousStatus"></div>
+        <div id="currentStatus"></div>
+    </div>
+</body>
+<script src="js/details.js"></script>
+<script src="js/findFPMMArchiveData.js"></script>
+</html>
