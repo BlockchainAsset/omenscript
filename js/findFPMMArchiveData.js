@@ -186,7 +186,7 @@ async function createCSV(){
 	})
 	.then(function() {
 		// This adds the CSV Header
-		let CSVHeader = ['Fixed Product Market ID', 'Market Creator Address'];
+		let CSVHeader = ['Fixed Product Market ID', 'Title', 'Market Creator Address'];
 		for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 			CSVHeader.push('block'+block+'-'+(block+(blockInterval * dailyAverageBlockInterval)))
 		}
@@ -195,7 +195,7 @@ async function createCSV(){
 	.then(function() {
 		// This creates the individual average market liquidity from the start block to end block.
 		FPMMs.forEach(FPMM => {
-			let CSVRow = [FPMM.id, FPMM.creator];
+			let CSVRow = [FPMM.id, FPMM.title, FPMM.creator];
 			let totalValueAmongRow = 0;
 			for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 				let averageIndividualTotalPoolTokenInUSDValueForDailyAverageBlockInterval = 0;
