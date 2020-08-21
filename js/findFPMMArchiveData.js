@@ -46,7 +46,7 @@ async function createCSV(){
 
 	// CSV Content
 	var CSVRowContent = [];
-	var CSVContent = "data:text/csv;charset=utf-8,";
+	var CSVContent = 'data:text/csv;charset=utf-8,';
 
 	await fetch(omenURL, {
 		method: 'POST',
@@ -186,7 +186,7 @@ async function createCSV(){
 	})
 	.then(function() {
 		// This adds the CSV Header
-		let CSVHeader = ['Fixed Product Market ID', 'Title', 'Market Creator Address'];
+		let CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Address'];
 		for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 			CSVHeader.push('block'+block+'-'+(block+(blockInterval * dailyAverageBlockInterval)))
 		}
@@ -195,7 +195,9 @@ async function createCSV(){
 	.then(function() {
 		// This creates the individual average market liquidity from the start block to end block.
 		FPMMs.forEach(FPMM => {
-			let CSVRow = [FPMM.id, FPMM.title, FPMM.creator];
+			let FPMMID = FPMM.id;
+			let FPMMIDLink = '=HYPERLINK("https://omen.eth.link/#/'+FPMMID+'")';
+			let CSVRow = ['"'+FPMMIDLink+'"', '"'+FPMM.title+'"', FPMM.creator];
 			let totalValueAmongRow = 0;
 			for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 				let averageIndividualTotalPoolTokenInUSDValueForDailyAverageBlockInterval = 0;
@@ -225,11 +227,12 @@ async function createCSV(){
 	})
 	.then(function() {
 		CSVRowContent.forEach(function(rowArray) {
-			let row = rowArray.join(",");
-			CSVContent += row + "\r\n";
+			let row = rowArray.join(',');
+			CSVContent += row + '\r\n';
 		});
 	
 		var encodedUri = encodeURI(CSVContent);
+		encodedUri = encodedUri.replace(/#/g, '%23');
 		var link = document.createElement("a");
 		link.setAttribute("href", encodedUri);
 		link.setAttribute("download", "FPMMArchiveData.csv");
