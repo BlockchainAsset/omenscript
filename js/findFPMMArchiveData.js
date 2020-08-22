@@ -23,6 +23,11 @@ async function createCSV(){
 	var ETHPriceList = {};
 	var ETHPriceGQLQuery = '';
 	var ETHPriceGQLData;
+	var marketCreatorReward = {};
+	var marketCreatorRewardAddress = new Set();
+	var averageLiquidityOfMarket = {};
+	var totalAverageLiquidityOfMarket = 0;
+	var monthlyPNKReward = 300000;
 
 	// GraphQL Query & Data
 	// If the number of FPMMs gets higher than 1000, then the function has to be written in a loop.
@@ -45,8 +50,12 @@ async function createCSV(){
 	var FPMMBlockGQLData;
 
 	// CSV Content
-	var CSVRowContent = [];
-	var CSVContent = 'data:text/csv;charset=utf-8,';
+	var CSVRowContentDetailed = [];
+	var CSVContentDetailed = 'data:text/csv;charset=utf-8,';
+	var CSVRowContentBasic = [];
+	var CSVContentBasic = 'data:text/csv;charset=utf-8,';
+	var CSVRowContentReward = [];
+	var CSVContentReward = 'data:text/csv;charset=utf-8,';
 
 	await fetch(omenURL, {
 		method: 'POST',
@@ -185,20 +194,33 @@ async function createCSV(){
 		}
 	})
 	.then(function() {
-		// This adds the CSV Header
+		// This adds the CSV Headers to Detailed, Basic and Reward CSVs.
+
+		// For Detailed One.
 		let CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Address'];
 		for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 			CSVHeader.push('block'+block+'-'+(block+(blockInterval * dailyAverageBlockInterval)))
 		}
-		CSVRowContent.push(CSVHeader);
+		CSVHeader.push('Average Liquidity over the period '+startBlockNumber+' to '+endBlockNumber);
+		CSVRowContentDetailed.push(CSVHeader);
+
+		// For Basic One.
+		CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Address', 'Average Liquidity over the period '+startBlockNumber+' to '+endBlockNumber, 'PNK Reward'];
+		CSVRowContentBasic.push(CSVHeader);
+
+		// For Reward One.
+		CSVHeader = ['Market Creator Address', 'Total PNK Reward'];
+		CSVRowContentReward.push(CSVHeader);
+
 	})
 	.then(function() {
 		// This creates the individual average market liquidity from the start block to end block.
 		FPMMs.forEach(FPMM => {
-			let FPMMID = FPMM.id;
-			let FPMMIDLink = '=HYPERLINK("https://omen.eth.link/#/'+FPMMID+'")';
-			let CSVRow = ['"'+FPMMIDLink+'"', '"'+FPMM.title+'"', FPMM.creator];
+			// let FPMMIDLink = '=HYPERLINK("https://omen.eth.link/#/'+FPMM.id+'")'; // This does not work for Google Sheets
+			let FPMMIDLink = 'https://omen.eth.link/#/'+FPMM.id+''; // This works for Google Sheets
+			let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator];
 			let totalValueAmongRow = 0;
+			let totalValueAmongRowDividedBy = 0;
 			for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 				let averageIndividualTotalPoolTokenInUSDValueForDailyAverageBlockInterval = 0;
 				let dividedBy = 0;
@@ -218,26 +240,83 @@ async function createCSV(){
 				}
 				CSVRow.push(finalValue);
 				totalValueAmongRow += finalValue;
+				totalValueAmongRowDividedBy += 1;
 			}
 			// If there are no values among the columns in a row, we don't add it to the final list.
 			if(totalValueAmongRow != 0){
-				CSVRowContent.push(CSVRow);
+				averageLiquidityOfMarket[FPMM.id] = totalValueAmongRow/totalValueAmongRowDividedBy;
+				totalAverageLiquidityOfMarket += averageLiquidityOfMarket[FPMM.id];
+				CSVRow.push(averageLiquidityOfMarket[FPMM.id]);
+				CSVRowContentDetailed.push(CSVRow);
 			}
 		});
 	})
 	.then(function() {
-		CSVRowContent.forEach(function(rowArray) {
+		// This populates the ROW data for Basic CSV
+		FPMMs.forEach(FPMM => {
+			let FPMMIDLink = 'https://omen.eth.link/#/'+FPMM.id+'';
+			if(averageLiquidityOfMarket[FPMM.id] > 0){
+				let PNKReward = monthlyPNKReward * (averageLiquidityOfMarket[FPMM.id]/totalAverageLiquidityOfMarket);
+				if(marketCreatorReward[FPMM.creator] == undefined){
+					marketCreatorReward[FPMM.creator] = 0;
+				}
+				marketCreatorReward[FPMM.creator] += PNKReward;
+				marketCreatorRewardAddress.add(FPMM.creator);
+				let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator, averageLiquidityOfMarket[FPMM.id], PNKReward];
+				CSVRowContentBasic.push(CSVRow);
+			}
+		})
+
+		// This populates the ROW data for Reward CSV
+		for (let creator of marketCreatorRewardAddress) {
+			let CSVRow = [creator, marketCreatorReward[creator]];
+			CSVRowContentReward.push(CSVRow);
+		}
+	})
+	.then(function() {
+		// This is the download CSV section.
+		// This one created the row content for the Detailed.
+		CSVRowContentDetailed.forEach(function(rowArray) {
 			let row = rowArray.join(',');
-			CSVContent += row + '\r\n';
+			CSVContentDetailed += row + '\r\n';
 		});
 	
-		var encodedUri = encodeURI(CSVContent);
+		// This one created the row content for the Basic.
+		CSVRowContentBasic.forEach(function(rowArray) {
+			let row = rowArray.join(',');
+			CSVContentBasic += row + '\r\n';
+		});
+	
+		// This one created the row content for the Reward.
+		CSVRowContentReward.forEach(function(rowArray) {
+			let row = rowArray.join(',');
+			CSVContentReward += row + '\r\n';
+		});
+
+		// This one downloads the detailed version.
+		var encodedUri = encodeURI(CSVContentDetailed);
 		encodedUri = encodedUri.replace(/#/g, '%23');
 		var link = document.createElement("a");
 		link.setAttribute("href", encodedUri);
-		link.setAttribute("download", "FPMMArchiveData.csv");
+		link.setAttribute("download", "FPMMArchiveDataDetailed.csv");
 		document.body.appendChild(link);
-	
+		link.click();
+
+		// This one downloads the basic version.
+		encodedUri = encodeURI(CSVContentBasic);
+		encodedUri = encodedUri.replace(/#/g, '%23');
+		link = document.createElement("a");
+		link.setAttribute("href", encodedUri);
+		link.setAttribute("download", "FPMMArchiveDataBasic.csv");
+		document.body.appendChild(link);
+		link.click();
+
+		// This one downloads the reward version.
+		encodedUri = encodeURI(CSVContentReward);
+		link = document.createElement("a");
+		link.setAttribute("href", encodedUri);
+		link.setAttribute("download", "FPMMArchiveDataReward.csv");
+		document.body.appendChild(link);
 		link.click();
 	})
 	.then(function() {
