@@ -10,8 +10,7 @@ async function createCSV(){
 	.then(response => response.json())
 	.then(data => {
 		FPMMs = data.data.fixedProductMarketMakers;
-		console.log('Successfully queried all the FPMM Data');
-		document.getElementById('previousStatus').innerHTML = 'Successfully queried all the FPMM Data';
+		updateStatus('Successfully queried all the FPMM Data', false);
 	})
 	.catch((error) => {
 		console.error('Error:', error);
@@ -50,8 +49,7 @@ async function createCSV(){
 				let blockname = 'block'+block;
 				ETHPriceList[blockname] = Number(data.data[blockname].ethPrice);
 			}
-			console.log('Successfully queried the ETH Price');
-			document.getElementById('currentStatus').innerHTML = 'Successfully queried the ETH Price';
+			updateStatus('Successfully queried the ETH Price', false);
 		})
 		.catch((error) => {
 			console.error('Error:', error);
@@ -65,7 +63,7 @@ async function createCSV(){
 		for (let Token of uniqueTokenArray) {
 			TokenGQLQuery = ''
 			for (let block = startBlockNumber; block <= endBlockNumber; block+=blockInterval) {
-				TokenGQLQuery += 'block'+block+': token(id: "'+Token+'", block: {number: '+block+'}){ id derivedETH } ';
+				TokenGQLQuery += 'block'+block+': token(id: "'+Token+'", block: {number: '+block+'}){ id name derivedETH } ';
 			}
 			TokenGQLQuery = '{ ' + TokenGQLQuery + '}';
 			TokenGQLData = {
@@ -82,14 +80,13 @@ async function createCSV(){
 			.then(response => response.json())
 			.then(data => {
 				// Inserting all the ethereum price list based on the block numbers.
+				let GQLID = '';
 				for (let block = startBlockNumber; block <= endBlockNumber; block+=blockInterval) {
-					let GQLID = 'block'+block;
+					GQLID = 'block'+block;
 					let tokenID = GQLID+Token;
 					tokenToETHValue[tokenID] = Number(data.data[GQLID].derivedETH);
 				}
-				console.log('Successfully queried the '+Token+' Price');
-				document.getElementById('previousStatus').innerHTML = document.getElementById('currentStatus').innerHTML;
-				document.getElementById('currentStatus').innerHTML = 'Successfully queried the '+Token+' Price';
+				updateStatus('Successfully queried the '+data.data[GQLID].name+' Price', false)
 			})
 			.catch((error) => {
 				console.error('Error:', error);
@@ -136,9 +133,7 @@ async function createCSV(){
 						totalPoolLiquidityForBlock[GQLID] += individualTotalPoolTokeninUSDValueForBlock[fpmmID];
 					}
 				});
-				console.log('Successfully queried the block: '+block+' FPMM Data');
-				document.getElementById('previousStatus').innerHTML = document.getElementById('currentStatus').innerHTML;
-				document.getElementById('currentStatus').innerHTML = 'Successfully queried the block: '+block+' FPMM Data';
+				updateStatus('Successfully queried the block: '+block+' FPMM Data', false);
 				totalPoolLiquidityForBlock[GQLID] = Math.ceil(totalPoolLiquidityForBlock[GQLID]);			
 			})
 			.catch((error) => {
@@ -146,11 +141,32 @@ async function createCSV(){
 			})
 		}
 	})
+	.then(async function() {
+		// This gets the actual market creator who created the market. The user wallet.
+		// The FPMM.creator is actually a proxy.
+
+		// Creating the list of only unique proxy contracts.
+		FPMMs.forEach(FPMM => {
+			uniqueProxyCreator.add(FPMM.creator);
+		})
+
+		for(let proxy of uniqueProxyCreator){
+			var proxyContract = new web3.eth.Contract(JSON.parse(ABI), proxy);
+			await proxyContract.methods.getOwners().call(function(error, result){
+				demo = result
+			})
+			.then(function() {
+				marketCreator[proxy] = demo[0];
+				updateStatus('Successfully queried the user from the proxy: '+proxy, false);
+			});
+		}
+
+	})
 	.then(function() {
 		// This adds the CSV Headers to Detailed, Basic and Reward CSVs.
 
 		// For Detailed One.
-		let CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Address'];
+		let CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Proxy', 'Market Creator'];
 		for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
 			CSVHeader.push('block'+block+'-'+(block+(blockInterval * dailyAverageBlockInterval)))
 		}
@@ -158,11 +174,11 @@ async function createCSV(){
 		CSVRowContentDetailed.push(CSVHeader);
 
 		// For Basic One.
-		CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Address', 'Average Liquidity over the period '+startBlockNumber+' to '+endBlockNumber, 'PNK Reward'];
+		CSVHeader = ['Omen Market Link', 'Title', 'Market Creator Proxy', 'Market Creator', 'Average Liquidity', 'PNK Reward', 'VALID/INVALID', 'Liquidity Based on Validity', 'PNK Reward Based on Validity'];
 		CSVRowContentBasic.push(CSVHeader);
 
 		// For Reward One.
-		CSVHeader = ['Market Creator Address', 'Total PNK Reward'];
+		CSVHeader = ['Market Creator', 'Total PNK Reward Based On Validity'];
 		CSVRowContentReward.push(CSVHeader);
 
 	})
@@ -171,7 +187,7 @@ async function createCSV(){
 		FPMMs.forEach(FPMM => {
 			// let FPMMIDLink = '=HYPERLINK("https://omen.eth.link/#/'+FPMM.id+'")'; // This does not work for Google Sheets
 			let FPMMIDLink = 'https://omen.eth.link/#/'+FPMM.id+''; // This works for Google Sheets
-			let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator];
+			let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator, marketCreator[FPMM.creator]];
 			let totalValueAmongRow = 0;
 			let totalValueAmongRowDividedBy = 0;
 			for (let block = startBlockNumber; block <= endBlockNumber; block += blockInterval * dailyAverageBlockInterval) {
@@ -205,24 +221,45 @@ async function createCSV(){
 		});
 	})
 	.then(function() {
+		// This is to find how many columns will be there.
+		let totalIndex = 2;
+		FPMMs.forEach(FPMM => {
+			if(averageLiquidityOfMarket[FPMM.id] > 0){
+				totalIndex++;
+			}
+		})
 		// This populates the ROW data for Basic CSV
+		let index = 2;
 		FPMMs.forEach(FPMM => {
 			let FPMMIDLink = 'https://omen.eth.link/#/'+FPMM.id+'';
+			// let FPMMTCRLink = '';
+			// if(FPMM.klerosTCRstatus == 1){
+			// 	FPMMTCRLink = 'https://curate.kleros.io/tcr/0xb72103eE8819F2480c25d306eEAb7c3382fBA612/'+FPMM.klerosTCRitemID;
+			// }
 			if(averageLiquidityOfMarket[FPMM.id] > 0){
 				let PNKReward = monthlyPNKReward * (averageLiquidityOfMarket[FPMM.id]/totalAverageLiquidityOfMarket);
 				if(marketCreatorReward[FPMM.creator] == undefined){
 					marketCreatorReward[FPMM.creator] = 0;
 				}
 				marketCreatorReward[FPMM.creator] += PNKReward;
-				marketCreatorRewardAddress.add(FPMM.creator);
-				let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator, averageLiquidityOfMarket[FPMM.id], PNKReward];
+				marketCreatorRewardAddress.add(marketCreator[FPMM.creator]);
+				// https://stackoverflow.com/a/22144225/7520013
+				let averageLiquidityCol = `"=IF(G${index}=""VALID"", E${index}, 0)"`;
+				let PNKRewardCol = '=(H'+index+'/H$'+totalIndex+')*'+monthlyPNKReward;
+				let CSVRow = [FPMMIDLink, '"'+FPMM.title+'"', FPMM.creator, marketCreator[FPMM.creator], averageLiquidityOfMarket[FPMM.id], PNKReward, 'VALID', averageLiquidityCol, PNKRewardCol];
+				index++;
 				CSVRowContentBasic.push(CSVRow);
 			}
 		})
+		totalIndex--;
+		let CSVRow = [,,,,,,'Total Liquidity Based on Validity', '=SUM(H2:H'+totalIndex+')', '=sum(I2:I'+totalIndex+')'];
+		CSVRowContentBasic.push(CSVRow);
 
+		index = 2;
 		// This populates the ROW data for Reward CSV
 		for (let creator of marketCreatorRewardAddress) {
-			let CSVRow = [creator, marketCreatorReward[creator]];
+			let CSVRow = [creator, `"=SUMIF(Basic!D$${index}:D$${totalIndex}, A${index}, Basic!I$${index}:I$${totalIndex})"`];
+			index++;
 			CSVRowContentReward.push(CSVRow);
 		}
 	})
@@ -251,7 +288,7 @@ async function createCSV(){
 		encodedUri = encodedUri.replace(/#/g, '%23');
 		var link = document.createElement("a");
 		link.setAttribute("href", encodedUri);
-		link.setAttribute("download", "FPMMArchiveDataDetailed.csv");
+		link.setAttribute("download", "Detailed.csv");
 		document.body.appendChild(link);
 		link.click();
 
@@ -260,7 +297,7 @@ async function createCSV(){
 		encodedUri = encodedUri.replace(/#/g, '%23');
 		link = document.createElement("a");
 		link.setAttribute("href", encodedUri);
-		link.setAttribute("download", "FPMMArchiveDataBasic.csv");
+		link.setAttribute("download", "Basic.csv");
 		document.body.appendChild(link);
 		link.click();
 
@@ -268,12 +305,11 @@ async function createCSV(){
 		encodedUri = encodeURI(CSVContentReward);
 		link = document.createElement("a");
 		link.setAttribute("href", encodedUri);
-		link.setAttribute("download", "FPMMArchiveDataReward.csv");
+		link.setAttribute("download", "Reward.csv");
 		document.body.appendChild(link);
 		link.click();
 	})
 	.then(function() {
-		document.getElementById('previousStatus').innerHTML = 'Done!';
-		document.getElementById('currentStatus').innerHTML = '';
+		updateStatus('Done!', true);
 	});
 }

@@ -1,3 +1,13 @@
+var demo;
+
+// Infura API Link
+var mainnetInfuraAPILink = "https://mainnet.infura.io/v3/2ed091fa3e0143c496fb5837c3a83704";
+
+window.addEventListener('load', function () {
+    console.log('For Web3 using HTTP Provider');
+    web3 = new Web3(new Web3.providers.HttpProvider(mainnetInfuraAPILink));
+})
+
 // Start Block and End Block Time
 var startBlockNumber; // These will be asked in front end.
 var endBlockNumber; // These will be asked in front end.
@@ -25,6 +35,8 @@ var individualTotalPoolTokeninUSDValueForBlock = {}; // This stores the individu
 var ETHPriceList = {}; // This contains the price list of ETH of block from the start block to the end block mentioned.
 var ETHPriceGQLQuery = ''; // This will contain the query used in TheGraph for querying the ETH price data.
 var ETHPriceGQLData;
+var uniqueProxyCreator = new Set(); // Will contain all the unique proxy contracts.
+var marketCreator = {}; // This will store the actual creator of the market, from the proxy.
 var marketCreatorReward = {}; // This will contain the amount of reward in PNK for a particular market creator address.
 var marketCreatorRewardAddress = new Set(); // This contains the list of unique market creator address for the block period mentioned.
 var averageLiquidityOfMarket = {}; // This contains the average liquidity of a market based on hourly snapshots for the block period.
@@ -33,7 +45,7 @@ var monthlyPNKReward = 300000; // This is the monthly PNK Reward.
 
 // GraphQL Query & Data
 // If the number of FPMMs gets higher than 1000, then the function has to be written in a loop.
-var allFPMMGQLQuery = "{ fixedProductMarketMakers(first: 1000) { id creator collateralToken scaledLiquidityMeasure title arbitrator } }";
+var allFPMMGQLQuery = "{ fixedProductMarketMakers(first: 1000) { id creator collateralToken scaledLiquidityMeasure title arbitrator klerosTCRitemID klerosTCRstatus } }";
 var allFPMMGQLData = {
     "query": allFPMMGQLQuery,
     "variables": {}
@@ -41,6 +53,9 @@ var allFPMMGQLData = {
 // This is to get the scaledLiquidityMeasure from all the FPMMs from the start of the block to the end.
 var FPMMBlockGQLQuery = '';
 var FPMMBlockGQLData;
+
+// This is to get the actual user behind the proxy.
+var ABI = '[{ "constant": true, "inputs": [], "name": "getOwners", "outputs": [{ "internalType": "address[]", "name": "", "type": "address[]" }], "payable": false, "stateMutability": "view", "type": "function" }]';
 
 // CSV Content
 var CSVRowContentDetailed = [];
@@ -57,4 +72,15 @@ function initiateFN() {
 
     // Calling the main function to calculate the data to CSV.
     createCSV();
+}
+
+function updateStatus(newStatus, completed) {
+    console.log(newStatus);
+    if(completed){
+        document.getElementById('previousStatus').innerHTML = '';
+    }
+    else{
+        document.getElementById('previousStatus').innerHTML = document.getElementById('currentStatus').innerHTML;
+    }
+    document.getElementById('currentStatus').innerHTML = newStatus;    
 }
